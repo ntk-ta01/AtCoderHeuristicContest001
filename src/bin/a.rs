@@ -24,8 +24,9 @@ fn main() {
     solve(&input, &mut out);
 
     // 答えを出力
-    for rect in out.iter() {
+    for (_, rect) in out.iter().enumerate() {
         println!("{}", rect);
+        // eprintln!("({}) r: {}, s: {}", i, input.size[i], rect.size());
     }
     eprintln!("{}", compute_score(&input, &out));
 }
@@ -39,24 +40,8 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
             .min(9999 - input.ps[k].1)
     });
     for i in order.into_iter() {
-        // 各企業iの上下左右におけるスペース増加可能分を調べる 各iに対してO(n)
-        let mut ex_spaces = vec![out[i].x1, out[i].y1, 10000 - out[i].x2, 10000 - out[i].y2];
-        for j in 0..input.n {
-            if i == j {
-                continue;
-            }
-            if out[i].x2 < out[j].x1 {
-                ex_spaces[2] = ex_spaces[2].min(out[i].x2 - out[j].x1);
-            } else {
-                ex_spaces[0] = ex_spaces[0].min(out[i].x1 - out[j].x2);
-            }
-
-            if out[i].y2 < out[j].y1 {
-                ex_spaces[3] = ex_spaces[3].min(out[i].y2 - out[j].y1);
-            } else {
-                ex_spaces[1] = ex_spaces[1].min(out[i].y1 - out[i].y2);
-            }
-        }
+        // 各企業iの上下左右におけるスペース増加可能分を調べる
+        let ex_spaces = vec![out[i].x1, out[i].y1, 10000 - out[i].x2, 10000 - out[i].y2];
 
         // 増加可能分が小さい方向から順番に
         // r_iを超えない範囲でスペースを増加させる(下は各方向の番号)
@@ -66,7 +51,41 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
         let mut d_order = vec![0, 1, 2, 3];
         d_order.sort_by_cached_key(|&k| ex_spaces[k]);
         for d in d_order.into_iter() {
-            out[i].extend(d, ex_spaces[d], input.size[i]);
+            let mut ex_len = 0;
+            let mut ng = ex_spaces[d] + 1;
+            while ng - ex_len > 1 {
+                let mid = (ex_len + ng) / 2;
+                match d {
+                    0 => out[i].x1 -= mid,
+                    1 => out[i].y1 -= mid,
+                    2 => out[i].x2 += mid,
+                    3 => out[i].y2 += mid,
+                    _ => (),
+                };
+                if out[i].size() > input.size[i]
+                    || (0..input.n)
+                        .into_iter()
+                        .any(|j| i != j && intersect(&out[i], &out[j]))
+                {
+                    ng = mid;
+                } else {
+                    ex_len = mid;
+                }
+                match d {
+                    0 => out[i].x1 += mid,
+                    1 => out[i].y1 += mid,
+                    2 => out[i].x2 -= mid,
+                    3 => out[i].y2 -= mid,
+                    _ => (),
+                };
+            }
+            match d {
+                0 => out[i].x1 -= ex_len,
+                1 => out[i].y1 -= ex_len,
+                2 => out[i].x2 += ex_len,
+                3 => out[i].y2 += ex_len,
+                _ => (),
+            };
         }
     }
 }
@@ -94,41 +113,6 @@ impl fmt::Display for Rect {
 impl Rect {
     fn size(&self) -> i32 {
         (self.x2 - self.x1) * (self.y2 - self.y1)
-    }
-    fn extend(&mut self, d: usize, ex: i32, r: i32) {
-        // r_iを超えないようにd方向にスペースを拡張
-        // [0,ex]で二分探索？
-        let mut ex_len = 0;
-        let mut ng = ex + 1;
-        while ng - ex_len > 1 {
-            let mid = (ex_len + ng) / 2;
-            match d {
-                0 => self.x1 -= mid,
-                1 => self.y1 -= mid,
-                2 => self.x2 += mid,
-                3 => self.y2 += mid,
-                _ => (),
-            };
-            if self.size() <= r {
-                ex_len = mid;
-            } else {
-                ng = mid;
-            }
-            match d {
-                0 => self.x1 += mid,
-                1 => self.y1 += mid,
-                2 => self.x2 -= mid,
-                3 => self.y2 -= mid,
-                _ => (),
-            };
-        }
-        match d {
-            0 => self.x1 -= ex_len,
-            1 => self.y1 -= ex_len,
-            2 => self.x2 += ex_len,
-            3 => self.y2 += ex_len,
-            _ => (),
-        };
     }
 }
 
