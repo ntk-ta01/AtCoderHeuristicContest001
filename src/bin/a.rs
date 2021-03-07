@@ -22,14 +22,15 @@ fn main() {
         .collect::<Vec<Rect>>();
 
     solve(&input, &mut out);
-    local_search(&input, &mut out);
+    let mut score = compute_score(&input, &out);
+    local_search(&input, &mut out, score);
+    score = compute_score(&input, &out);
 
     // 答えを出力
-    for (i, rect) in out.iter().enumerate() {
+    for rect in out.iter() {
         println!("{}", rect);
-        eprintln!("({}) r: {}, s: {}", i, input.size[i], rect.size());
     }
-    eprintln!("{}", compute_score(&input, &out));
+    eprintln!("{}", score);
 }
 
 fn solve(input: &Input, out: &mut Vec<Rect>) {
@@ -91,9 +92,10 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
     }
 }
 
-fn local_search(input: &Input, out: &mut Vec<Rect>) {
+fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64) {
     // 変形する長方形を決める
-    let mut rect_i;
+    // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
+    let mut rect_i = 0;
     let mut now = 256;
     for i in 0..input.n {
         let val = if out[i].size() > input.size[i] {
@@ -120,15 +122,192 @@ fn local_search(input: &Input, out: &mut Vec<Rect>) {
     //   0 x 2
     //     3
     // 4方向のうち最もスコアがよい方向に変形させる
+    // スコアは差分計算で求めたい
+    let mut score = score;
+    let mut ex_len = -1;
+    let mut shrs = vec![];
+    let mut real_d = -1;
     for d in 0..4 {
-        modify(0, &input, &mut out, rect_i, &ds);
+        let (now_score, now_ex_len, now_shrs) = modify(&input, out, rect_i, d);
+        if score < now_score {
+            score = now_score;
+            ex_len = now_ex_len;
+            shrs = now_shrs;
+            real_d = d;
+        }
+    }
+    if ex_len != -1 {
+        match real_d {
+            0 => out[rect_i].x1 -= ex_len,
+            1 => out[rect_i].y1 -= ex_len,
+            2 => out[rect_i].x2 += ex_len,
+            3 => out[rect_i].y2 += ex_len,
+            _ => (),
+        };
+        for (j, shr_d, shr_len) in shrs.iter() {
+            match shr_d {
+                0 => out[*j].x2 -= shr_len,
+                1 => out[*j].y2 -= shr_len,
+                2 => out[*j].x1 += shr_len,
+                3 => out[*j].y1 += shr_len,
+                _ => (),
+            };
+        }
     }
 }
 
-fn modify(depth: usize, input: &Input, out: &mut Vec<Rect>, rect_i: usize, ds: &Vec<usize>) {
-    if depth == ds.len() {
-        return;
+fn modify(
+    input: &Input,
+    out: &mut Vec<Rect>,
+    rect_i: usize,
+    d: i32,
+) -> (i64, i32, Vec<(usize, i32, i32)>) {
+    // r_i を超えないように二分探索
+    // 条件：
+    //    (x_j,y_j)があったらng
+    let ex_space = match d {
+        0 => out[rect_i].x1,
+        1 => out[rect_i].y1,
+        2 => 10000 - out[rect_i].x2,
+        3 => 10000 - out[rect_i].y2,
+        _ => 0,
+    };
+    let mut ex_len = 0;
+    let mut ng = ex_space + 1;
+    while ng - ex_len > 1 {
+        let mid = (ex_len + ng) / 2;
+        match d {
+            0 => out[rect_i].x1 -= mid,
+            1 => out[rect_i].y1 -= mid,
+            2 => out[rect_i].x2 += mid,
+            3 => out[rect_i].y2 += mid,
+            _ => (),
+        };
+        if out[rect_i].size() > input.size[rect_i]
+            || (0..input.n)
+                .into_iter()
+                .any(|j| rect_i != j && out[rect_i].contain_key(&input.ps[j]))
+        {
+            ng = mid;
+        } else {
+            ex_len = mid;
+        }
+        match d {
+            0 => out[rect_i].x1 += mid,
+            1 => out[rect_i].y1 += mid,
+            2 => out[rect_i].x2 -= mid,
+            3 => out[rect_i].y2 -= mid,
+            _ => (),
+        };
     }
+    match d {
+        0 => out[rect_i].x1 -= ex_len,
+        1 => out[rect_i].y1 -= ex_len,
+        2 => out[rect_i].x2 += ex_len,
+        3 => out[rect_i].y2 += ex_len,
+        _ => (),
+    };
+
+    // intersectしてるやつを縮める
+    // あとで戻せるように、縮めた長方形は覚えておく
+    let mut shrinkings = vec![];
+    for j in 0..input.n {
+        if rect_i == j || !intersect(&out[rect_i], &out[j]) {
+            continue;
+        }
+        // 縮める方向を決める
+        // 交差しなくなり、かつ縮める量が一番少ないやつに
+        // 0 :jのx2を、out[rect_i].x1に
+        // 1 :jのy2を、out[rect_i].y1に
+        // 2 :jのx1を、out[rect_i].x2に
+        // 3 :jのy1を、out[rect_i].y2に
+        let mut loss_area = i32::max_value();
+        let mut real_d = -1;
+        for now_d in 0..4 {
+            let mut loss_now = i32::max_value();
+            match now_d {
+                0 => {
+                    loss_now = if out[j].x1 < out[rect_i].x1 && input.ps[j].0 <= out[rect_i].x1 {
+                        (out[j].x2 - out[rect_i].x1) * (out[j].y2 - out[j].y1)
+                    } else {
+                        i32::max_value()
+                    };
+                }
+                1 => {
+                    loss_now = if out[j].y1 < out[rect_i].y1 && input.ps[j].1 <= out[rect_i].y1 {
+                        (out[j].x2 - out[j].x1) * (out[j].y2 - out[rect_i].y1)
+                    } else {
+                        i32::max_value()
+                    };
+                }
+                2 => {
+                    loss_now = if out[rect_i].x2 < out[j].x2 && out[rect_i].x2 <= input.ps[j].0 {
+                        (out[rect_i].x2 - out[j].x1) * (out[j].y2 - out[j].y1)
+                    } else {
+                        i32::max_value()
+                    };
+                }
+                3 => {
+                    loss_now = if out[rect_i].y2 < out[j].y2 && out[rect_i].y2 <= input.ps[j].1 {
+                        (out[j].x2 - out[j].x1) * (out[rect_i].y2 - out[j].y1)
+                    } else {
+                        i32::max_value()
+                    };
+                }
+                _ => (),
+            };
+            if loss_area > loss_now {
+                loss_area = loss_now;
+                real_d = now_d;
+            }
+        }
+        match real_d {
+            0 => {
+                shrinkings.push((j, real_d, out[j].x2 - out[rect_i].x1));
+                out[j].x2 = out[rect_i].x1;
+            }
+            1 => {
+                shrinkings.push((j, real_d, out[j].y2 - out[rect_i].y1));
+                out[j].y2 = out[rect_i].y1;
+            }
+            2 => {
+                shrinkings.push((j, real_d, out[rect_i].x2 - out[j].x1));
+                out[j].x1 = out[rect_i].x2;
+            }
+            3 => {
+                shrinkings.push((j, real_d, out[rect_i].y2 - out[j].y1));
+                out[j].y1 = out[rect_i].y2;
+            }
+            _ => (),
+        };
+        if intersect(&out[rect_i], &out[j]) {
+            panic!();
+        }
+    }
+    let score = compute_score(input, out);
+
+    // 変形を戻す
+
+    match d {
+        0 => out[rect_i].x1 += ex_len,
+        1 => out[rect_i].y1 += ex_len,
+        2 => out[rect_i].x2 -= ex_len,
+        3 => out[rect_i].y2 -= ex_len,
+        _ => (),
+    };
+
+    for (j, shr_d, shr_len) in shrinkings.iter() {
+        match shr_d {
+            0 => out[*j].x2 += shr_len,
+            1 => out[*j].y2 += shr_len,
+            2 => out[*j].x1 -= shr_len,
+            3 => out[*j].y1 -= shr_len,
+            _ => (),
+        };
+    }
+
+    // d方向に縮めたときの縮める量ex_lenとそのときのスコアscoreを返す
+    (score, ex_len, shrinkings)
 }
 
 struct Input {
@@ -154,6 +333,9 @@ impl fmt::Display for Rect {
 impl Rect {
     fn size(&self) -> i32 {
         (self.x2 - self.x1) * (self.y2 - self.y1)
+    }
+    fn contain_key(&self, other: &(i32, i32)) -> bool {
+        self.x1 <= other.0 && other.0 <= self.x2 && self.y1 <= other.1 && other.1 <= self.y2
     }
 }
 
