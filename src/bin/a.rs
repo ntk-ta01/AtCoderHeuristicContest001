@@ -22,11 +22,12 @@ fn main() {
         .collect::<Vec<Rect>>();
 
     solve(&input, &mut out);
+    local_search(&input, &mut out);
 
     // 答えを出力
-    for (_, rect) in out.iter().enumerate() {
+    for (i, rect) in out.iter().enumerate() {
         println!("{}", rect);
-        // eprintln!("({}) r: {}, s: {}", i, input.size[i], rect.size());
+        eprintln!("({}) r: {}, s: {}", i, input.size[i], rect.size());
     }
     eprintln!("{}", compute_score(&input, &out));
 }
@@ -87,6 +88,60 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
                 _ => (),
             };
         }
+    }
+}
+
+fn local_search(input: &Input, out: &mut Vec<Rect>) {
+    // 変形する長方形を決める
+    let mut rect_i;
+    let mut now = 256;
+    for i in 0..input.n {
+        let val = if out[i].size() > input.size[i] {
+            1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
+        } else {
+            out[i].size() as f64 / input.size[i] as f64 / 2.0
+        };
+        let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
+        // tmp が 255に近いほど要求面積に近い
+        if val >= 0.5 {
+            // r_iよりも大きく赤くなる
+            continue;
+        } else {
+            // r_iよりも小さく青くなる
+            if tmp < now {
+                now = tmp;
+                rect_i = i;
+            }
+        }
+    }
+    // 変形方向を決める 2^4 - 1方向
+    // (下は各方向の番号)
+    //     1
+    //   0 x 2
+    //     3
+    // 1,2を採用すれば右斜め上に変形
+    let mut ds: Vec<usize> = vec![];
+    for bit in 1..(1 << 4) {
+        for d in 0..4 {
+            if (bit >> d) & 1 == 1 {
+                // dを変形方向として採用
+                ds.push(d);
+            }
+        }
+    }
+    // 常に0->1->2->3の順で変形させると偏りが生まれそう
+    // dをシャッフルさせるか、全順番を試すか？ 4! = 24だし
+    todo!();
+
+    #[allow(unreachable_code)]
+    {
+        modify(0, &input, &mut out, rect_i, &ds);
+    }
+}
+
+fn modify(depth: usize, input: &Input, out: &mut Vec<Rect>, rect_i: usize, ds: &Vec<usize>) {
+    if depth == ds.len() {
+        return;
     }
 }
 
