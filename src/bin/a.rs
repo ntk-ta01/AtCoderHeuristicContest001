@@ -1,8 +1,10 @@
 use proconio::input;
-use std::fmt;
+use std::{collections::HashSet, fmt};
 
 const W: i32 = 10000;
+const TIMELIMIT: f64 = 4.9;
 fn main() {
+    let time = Timer::new();
     input! {
         n: usize,
         xys: [(i32, i32, i32); n],
@@ -23,7 +25,7 @@ fn main() {
 
     solve(&input, &mut out);
     let mut score = compute_score(&input, &out);
-    local_search(&input, &mut out, score);
+    local_search(&input, &mut out, score, time);
     score = compute_score(&input, &out);
 
     // 答えを出力
@@ -92,66 +94,81 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
     }
 }
 
-fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64) {
-    // 変形する長方形を決める
-    // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
-    let mut rect_i = 0;
-    let mut now = 256;
-    for i in 0..input.n {
-        let val = if out[i].size() > input.size[i] {
-            1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
-        } else {
-            out[i].size() as f64 / input.size[i] as f64 / 2.0
-        };
-        let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
-        // tmp が 255に近いほど要求面積に近い
-        if val >= 0.5 {
-            // r_iよりも大きく赤くなる
-            continue;
-        } else {
-            // r_iよりも小さく青くなる
-            if tmp < now {
-                now = tmp;
-                rect_i = i;
+fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) {
+    let mut loop_count = 0;
+    let mut mod_rects = HashSet::new();
+    loop {
+        loop_count += 1;
+        if loop_count >= 100 {
+            loop_count = 0;
+            if time.get_time() > TIMELIMIT {
+                break;
             }
         }
-    }
-    // 変形方向を決める 4方向
-    // (下は各方向の番号)
-    //     1
-    //   0 x 2
-    //     3
-    // 4方向のうち最もスコアがよい方向に変形させる
-    // スコアは差分計算で求めたい
-    let mut score = score;
-    let mut ex_len = -1;
-    let mut shrs = vec![];
-    let mut real_d = -1;
-    for d in 0..4 {
-        let (now_score, now_ex_len, now_shrs) = modify(&input, out, rect_i, d);
-        if score < now_score {
-            score = now_score;
-            ex_len = now_ex_len;
-            shrs = now_shrs;
-            real_d = d;
+        // 変形する長方形を決める
+        // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
+        let mut rect_i = 0;
+        let mut now = 256;
+        for i in 0..input.n {
+            let val = if out[i].size() > input.size[i] {
+                1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
+            } else {
+                out[i].size() as f64 / input.size[i] as f64 / 2.0
+            };
+            let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
+            // tmp が 255に近いほど要求面積に近い
+            if val >= 0.5 {
+                // r_iよりも大きく赤くなる
+                continue;
+            } else {
+                // r_iよりも小さく青くなる
+                if !mod_rects.contains(&i) && tmp < now {
+                    now = tmp;
+                    rect_i = i;
+                }
+            }
         }
-    }
-    if ex_len != -1 {
-        match real_d {
-            0 => out[rect_i].x1 -= ex_len,
-            1 => out[rect_i].y1 -= ex_len,
-            2 => out[rect_i].x2 += ex_len,
-            3 => out[rect_i].y2 += ex_len,
-            _ => (),
-        };
-        for (j, shr_d, shr_len) in shrs.iter() {
-            match shr_d {
-                0 => out[*j].x2 -= shr_len,
-                1 => out[*j].y2 -= shr_len,
-                2 => out[*j].x1 += shr_len,
-                3 => out[*j].y1 += shr_len,
+        mod_rects.insert(rect_i);
+        if mod_rects.len() >= 5 {
+            mod_rects.clear();
+        }
+        // 変形方向を決める 4方向
+        // (下は各方向の番号)
+        //     1
+        //   0 x 2
+        //     3
+        // 4方向のうち最もスコアがよい方向に変形させる
+        // スコアは差分計算で求めたい
+        let mut score = score;
+        let mut ex_len = -1;
+        let mut shrs = vec![];
+        let mut real_d = -1;
+        for d in 0..4 {
+            let (now_score, now_ex_len, now_shrs) = modify(&input, out, rect_i, d);
+            if score < now_score {
+                score = now_score;
+                ex_len = now_ex_len;
+                shrs = now_shrs;
+                real_d = d;
+            }
+        }
+        if ex_len != -1 {
+            match real_d {
+                0 => out[rect_i].x1 -= ex_len,
+                1 => out[rect_i].y1 -= ex_len,
+                2 => out[rect_i].x2 += ex_len,
+                3 => out[rect_i].y2 += ex_len,
                 _ => (),
             };
+            for (j, shr_d, shr_len) in shrs.iter() {
+                match shr_d {
+                    0 => out[*j].x2 -= shr_len,
+                    1 => out[*j].y2 -= shr_len,
+                    2 => out[*j].x1 += shr_len,
+                    3 => out[*j].y1 += shr_len,
+                    _ => (),
+                };
+            }
         }
     }
 }
@@ -372,4 +389,27 @@ fn compute_score(input: &Input, out: &Vec<Rect>) -> i64 {
         score += 1.0 - (1.0 - s) * (1.0 - s);
     }
     (1e9 * score / input.n as f64).round() as i64
+}
+
+pub fn get_time() -> f64 {
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    t.as_secs() as f64 + t.subsec_nanos() as f64 * 1e-9
+}
+
+struct Timer {
+    start_time: f64,
+}
+
+impl Timer {
+    fn new() -> Timer {
+        Timer {
+            start_time: get_time(),
+        }
+    }
+
+    fn get_time(&self) -> f64 {
+        get_time() - self.start_time
+    }
 }
