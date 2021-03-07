@@ -114,27 +114,13 @@ fn local_search(input: &Input, out: &mut Vec<Rect>) {
             }
         }
     }
-    // 変形方向を決める 2^4 - 1方向
+    // 変形方向を決める 4方向
     // (下は各方向の番号)
     //     1
     //   0 x 2
     //     3
-    // 1,2を採用すれば右斜め上に変形
-    let mut ds: Vec<usize> = vec![];
-    for bit in 1..(1 << 4) {
-        for d in 0..4 {
-            if (bit >> d) & 1 == 1 {
-                // dを変形方向として採用
-                ds.push(d);
-            }
-        }
-    }
-    // 常に0->1->2->3の順で変形させると偏りが生まれそう
-    // dをシャッフルさせるか、全順番を試すか？ 4! = 24だし
-    todo!();
-
-    #[allow(unreachable_code)]
-    {
+    // 4方向のうち最もスコアがよい方向に変形させる
+    for d in 0..4 {
         modify(0, &input, &mut out, rect_i, &ds);
     }
 }
