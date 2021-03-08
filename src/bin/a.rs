@@ -1,8 +1,9 @@
 use proconio::input;
+use rand::Rng;
 use std::{collections::HashSet, fmt};
 
 const W: i32 = 10000;
-const TIMELIMIT: f64 = 4.9;
+const TIMELIMIT: f64 = 4.955;
 fn main() {
     let time = Timer::new();
     input! {
@@ -25,14 +26,13 @@ fn main() {
 
     solve(&input, &mut out);
     let mut score = compute_score(&input, &out);
-    local_search(&input, &mut out, score, time);
-    score = compute_score(&input, &out);
+    score = local_search(&input, &mut out, score, time);
 
     // 答えを出力
     for rect in out.iter() {
-        println!("{}", rect);
+        // println!("{}", rect);
     }
-    eprintln!("{}", score);
+    // eprintln!("{}", score);
 }
 
 fn solve(input: &Input, out: &mut Vec<Rect>) {
@@ -94,16 +94,30 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
     }
 }
 
-fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) {
+fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) -> i64 {
+    let mut rng = rand_pcg::Pcg64Mcg::new(45612012516);
+
+    const STARTTEMP: f64 = 1e7;
+    const ENDTEMP: f64 = 8e6;
+
+    let mut temp = STARTTEMP;
+    let mut prob: f64 = 0.0;
+
+    let mut best_score = score;
+    let mut best_out = out.clone();
+
     let mut loop_count = 0;
     let mut mod_rects = HashSet::new();
     loop {
         loop_count += 1;
         if loop_count >= 100 {
+            println!("{} {}", temp, score);
             loop_count = 0;
-            if time.get_time() > TIMELIMIT {
+            let passed = time.get_time() / TIMELIMIT;
+            if passed >= 1.0 {
                 break;
             }
+            temp = STARTTEMP.powf(1.0 - passed) * ENDTEMP.powf(passed);
         }
         // 変形する長方形を決める
         // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
@@ -129,7 +143,7 @@ fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) {
             }
         }
         mod_rects.insert(rect_i);
-        if mod_rects.len() >= 5 {
+        if mod_rects.len() >= 40 {
             mod_rects.clear();
         }
         // 変形方向を決める 4方向
@@ -144,11 +158,12 @@ fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) {
         let mut shrs = vec![];
         let mut real_d = -1;
         for d in 0..4 {
-            let (now_score, now_ex_len, now_shrs) = modify(&input, out, rect_i, d);
-            if score < now_score {
-                score = now_score;
-                ex_len = now_ex_len;
-                shrs = now_shrs;
+            let (new_score, new_ex_len, new_shrs) = modify(&input, out, rect_i, d);
+            prob = f64::exp((new_score - score) as f64 / temp);
+            if score <= new_score || rng.gen_bool(prob) {
+                score = new_score;
+                ex_len = new_ex_len;
+                shrs = new_shrs;
                 real_d = d;
             }
         }
@@ -170,7 +185,13 @@ fn local_search(input: &Input, out: &mut Vec<Rect>, score: i64, time: Timer) {
                 };
             }
         }
+        if best_score < score {
+            best_score = score;
+            best_out = out.clone();
+        }
     }
+    *out = best_out;
+    best_score
 }
 
 fn modify(
@@ -200,7 +221,7 @@ fn modify(
             3 => out[rect_i].y2 += mid,
             _ => (),
         };
-        if out[rect_i].size() > input.size[rect_i]
+        if out[rect_i].size() > (input.size[rect_i] + 20000)
             || (0..input.n)
                 .into_iter()
                 .any(|j| rect_i != j && out[rect_i].contain_key(&input.ps[j]))
