@@ -82,7 +82,14 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
                     _ => (),
                 };
             }
-            let p = if input.n > 100 { 2 } else { 1 };
+            // 小細工パート nが大きいときは自由度を与えるイメージ
+            let p = if input.n > 175 {
+                3
+            } else if input.n > 100 {
+                2
+            } else {
+                1
+            };
             match d {
                 0 => out[i].x1 -= ex_len / p,
                 1 => out[i].y1 -= ex_len / p,
