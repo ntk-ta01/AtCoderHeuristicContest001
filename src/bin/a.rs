@@ -120,12 +120,16 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
             if passed >= 1.0 {
                 break;
             }
-            if passed > 0.4 {
+            if passed > 0.8 {
                 allow_shrink = false;
             }
             temp = STARTTEMP.powf(1.0 - passed) * ENDTEMP.powf(passed);
         }
-        if allow_shrink && rng.gen_bool(0.2) {
+        if mod_rects.len() >= input.n * 8 / 10 {
+            mod_rects.clear();
+        }
+        if allow_shrink && rng.gen_bool(0.0) {
+            dbg!("shrink!");
             // スコアが低い長方形の近くの長方形を縮小させるとよい？
             let d = [0, 1, 2, 3].choose(&mut rng);
             if let Some(d) = d {
@@ -154,7 +158,7 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
                 let mut dist = i32::max_value();
                 let mut rect_j = 0;
                 for j in 0..input.n {
-                    if rect_i == j && mod_rects.contains(&j) {
+                    if rect_i == j || mod_rects.contains(&j) {
                         continue;
                     }
                     // rect_i と距離が近い長方形を探索
@@ -193,9 +197,6 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
                 }
             }
             mod_rects.insert(rect_i);
-            if mod_rects.len() >= (input.n * 10 / 9) {
-                mod_rects.clear();
-            }
             // 変形方向を決める 4方向
             // (下は各方向の番号)
             //     1
@@ -477,7 +478,7 @@ fn compute_score(input: &Input, out: &Vec<Rect>) -> i64 {
             && out[i].y1 <= input.ps[i].1
             && input.ps[i].1 < out[i].y2)
         {
-            eprintln!("rectangle {} does not contain point {}", i, i);
+            // eprintln!("rectangle {} does not contain point {}", i, i);
             continue;
         }
         for j in 0..i {
