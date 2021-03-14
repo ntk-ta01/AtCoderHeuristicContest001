@@ -1,5 +1,5 @@
 use proconio::input;
-use rand::{prelude::SliceRandom, Rng};
+use rand::Rng;
 use std::{collections::HashSet, fmt};
 
 const W: i32 = 10000;
@@ -110,7 +110,6 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
     let mut mod_rects = HashSet::new();
     let mut score = score;
 
-    let mut allow_shrink = true;
     loop {
         loop_count += 1;
         if loop_count >= 100 {
@@ -120,120 +119,66 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
             if passed >= 1.0 {
                 break;
             }
-            if passed > 0.8 {
-                allow_shrink = false;
-            }
             temp = STARTTEMP.powf(1.0 - passed) * ENDTEMP.powf(passed);
         }
         if mod_rects.len() >= input.n * 8 / 10 {
             mod_rects.clear();
         }
-        if allow_shrink && rng.gen_bool(0.0) {
-            dbg!("shrink!");
-            // スコアが低い長方形の近くの長方形を縮小させるとよい？
-            let d = [0, 1, 2, 3].choose(&mut rng);
-            if let Some(d) = d {
-                let mut rect_i = 0;
-                let mut now = 256;
-                for i in 0..input.n {
-                    let val = if out[i].size() > input.size[i] {
-                        1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
-                    } else {
-                        out[i].size() as f64 / input.size[i] as f64 / 2.0
-                    };
-                    let tmp =
-                        ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
-                    // tmp が 255に近いほど要求面積に近い
-                    if val >= 0.5 {
-                        // r_iよりも大きく赤くなる
-                        continue;
-                    } else {
-                        // r_iよりも小さく青くなる
-                        if !mod_rects.contains(&i) && tmp < now {
-                            now = tmp;
-                            rect_i = i;
-                        }
-                    }
-                }
-                let mut dist = i32::max_value();
-                let mut rect_j = 0;
-                for j in 0..input.n {
-                    if rect_i == j || mod_rects.contains(&j) {
-                        continue;
-                    }
-                    // rect_i と距離が近い長方形を探索
-                    let now_dist = out[rect_i].dist(&out[j]);
-                    if now_dist < dist {
-                        dist = now_dist;
-                        rect_j = j;
-                    }
-                }
-                mod_rects.insert(rect_j);
-                let new_score = shrink(&input, out, rect_j, *d);
-                score = new_score;
-            }
-        } else {
-            // 変形する長方形を決める
-            // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
-            let mut rect_i = 0;
-            let mut now = 256;
-            for i in 0..input.n {
-                let val = if out[i].size() > input.size[i] {
-                    1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
-                } else {
-                    out[i].size() as f64 / input.size[i] as f64 / 2.0
-                };
-                let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
-                // tmp が 255に近いほど要求面積に近い
-                if val >= 0.5 {
-                    // r_iよりも大きく赤くなる
-                    continue;
-                } else {
-                    // r_iよりも小さく青くなる
-                    if !mod_rects.contains(&i) && tmp < now {
-                        now = tmp;
-                        rect_i = i;
-                    }
-                }
-            }
-            mod_rects.insert(rect_i);
-            // 変形方向を決める 4方向
-            // (下は各方向の番号)
-            //     1
-            //   0 x 2
-            //     3
-            // 4方向のうち最もスコアがよい方向に変形させる
-            // スコアは差分計算で求めたい
-            let mut ex_len;
-            let mut shrs;
-            let mut real_d;
-            for d in 0..4 {
-                let (new_score, new_ex_len, new_shrs) = expand(&input, out, rect_i, d);
-                prob = f64::exp((new_score - score) as f64 / temp);
-                if score <= new_score || rng.gen_bool(prob) {
-                    score = new_score;
-                    ex_len = new_ex_len;
-                    shrs = new_shrs;
-                    real_d = d;
-                    match real_d {
-                        0 => out[rect_i].x1 -= ex_len,
-                        1 => out[rect_i].y1 -= ex_len,
-                        2 => out[rect_i].x2 += ex_len,
-                        3 => out[rect_i].y2 += ex_len,
-                        _ => (),
-                    };
-                    for (j, shr_d, shr_len) in shrs.iter() {
-                        match shr_d {
-                            0 => out[*j].x2 -= shr_len,
-                            1 => out[*j].y2 -= shr_len,
-                            2 => out[*j].x1 += shr_len,
-                            3 => out[*j].y1 += shr_len,
-                            _ => (),
-                        };
-                    }
+        // 変形する長方形を決める
+        // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
+        let mut rect_i = 0;
+        let mut now = 256;
+        for i in 0..input.n {
+            let val = if out[i].size() > input.size[i] {
+                1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
+            } else {
+                out[i].size() as f64 / input.size[i] as f64 / 2.0
+            };
+            let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
+            // tmp が 255に近いほど要求面積に近い
+            if val >= 0.5 {
+                // r_iよりも大きく赤くなる
+                continue;
+            } else {
+                // r_iよりも小さく青くなる
+                if !mod_rects.contains(&i) && tmp < now {
+                    now = tmp;
+                    rect_i = i;
                 }
             }
         }
+        mod_rects.insert(rect_i);
+        // 変形方向を決める 4方向
+        // (下は各方向の番号)
+        //     1
+        //   0 x 2
+        //     3
+        // 4方向のうち最もスコアがよい方向に変形させる
+        // スコアは差分計算で求めたい
+        for d in 0..4 {
+            let (new_score, ex_len, shrs) = expand(&input, out, rect_i, d);
+            prob = f64::exp((new_score - score) as f64 / temp);
+            if score <= new_score || rng.gen_bool(prob) {
+                score = new_score;
+                match d {
+                    0 => out[rect_i].x1 -= ex_len,
+                    1 => out[rect_i].y1 -= ex_len,
+                    2 => out[rect_i].x2 += ex_len,
+                    3 => out[rect_i].y2 += ex_len,
+                    _ => (),
+                };
+                for (j, shr_d, shr_len) in shrs.iter() {
+                    match shr_d {
+                        0 => out[*j].x2 -= shr_len,
+                        1 => out[*j].y2 -= shr_len,
+                        2 => out[*j].x1 += shr_len,
+                        3 => out[*j].y1 += shr_len,
+                        _ => (),
+                    };
+                }
+            }
+        }
+
         if best_score < score {
             best_score = score;
             best_out = out.clone();
@@ -241,26 +186,6 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
     }
     *out = best_out;
     best_score
-}
-
-fn shrink(input: &Input, out: &mut Vec<Rect>, rect_i: usize, d: i32) -> i64 {
-    // 対象の長方形をd方向に縮小する
-    let sh_len = match d {
-        0 => input.ps[rect_i].0 - out[rect_i].x1,
-        1 => input.ps[rect_i].1 - out[rect_i].y1,
-        2 => out[rect_i].x2 - input.ps[rect_i].0 - 1,
-        3 => out[rect_i].y2 - input.ps[rect_i].1 - 1,
-        _ => 0,
-    };
-    match d {
-        0 => out[rect_i].x1 += sh_len,
-        1 => out[rect_i].y1 += sh_len,
-        2 => out[rect_i].x2 -= sh_len,
-        3 => out[rect_i].y2 -= sh_len,
-        _ => (),
-    };
-    let score = compute_score(input, out);
-    score
 }
 
 fn expand(
@@ -442,8 +367,9 @@ impl Rect {
         (self.x2 - self.x1) * (self.y2 - self.y1)
     }
     fn contain_key(&self, other: &(i32, i32)) -> bool {
-        self.x1 <= other.0 && other.0 <= self.x2 && self.y1 <= other.1 && other.1 <= self.y2
+        self.x1 <= other.0 && other.0 < self.x2 && self.y1 <= other.1 && other.1 < self.y2
     }
+    #[allow(dead_code)]
     fn dist(&self, other: &Rect) -> i32 {
         let mut dist = i32::max_value();
         dist = dist.min((self.x1 - other.x1).abs());
