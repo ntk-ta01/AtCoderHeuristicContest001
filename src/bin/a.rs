@@ -1,6 +1,6 @@
 use proconio::input;
 use rand::Rng;
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 const TIMELIMIT: f64 = 4.9;
 fn main() {
@@ -106,8 +106,26 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
     let mut best_out = out.clone();
 
     let mut loop_count = 0;
-    let mut mod_rects = HashSet::new();
     let mut score = score;
+
+    let mut rect_idx = 0;
+    let mut rect_vec_by_val = vec![];
+    let mut vals = vec![];
+    for i in 0..input.n {
+        let val = if out[i].size() > input.size[i] {
+            1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
+        } else {
+            out[i].size() as f64 / input.size[i] as f64 / 2.0
+        };
+        let mut tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
+        // tmp が 255に近いほど要求面積に近い
+        if val >= 0.5 {
+            tmp = i32::max_value();
+        }
+        rect_vec_by_val.push(i);
+        vals.push(tmp);
+    }
+    rect_vec_by_val.sort_by_key(|rect_i| vals[*rect_i]);
 
     loop {
         loop_count += 1;
@@ -120,33 +138,29 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
             }
             temp = STARTTEMP.powf(1.0 - passed) * ENDTEMP.powf(passed);
         }
-        if mod_rects.len() >= input.n * 8 / 10 {
-            mod_rects.clear();
-        }
         // 変形する長方形を決める
         // 一つ長方形を選ぶより、tmpの値でソートしたベクタを作る方がよさそう
-        let mut rect_i = 0;
-        let mut now = 256;
-        for i in 0..input.n {
-            let val = if out[i].size() > input.size[i] {
-                1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
-            } else {
-                out[i].size() as f64 / input.size[i] as f64 / 2.0
-            };
-            let tmp = ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
-            // tmp が 255に近いほど要求面積に近い
-            if val >= 0.5 {
-                // r_iよりも大きく赤くなる
-                continue;
-            } else {
-                // r_iよりも小さく青くなる
-                if !mod_rects.contains(&i) && tmp < now {
-                    now = tmp;
-                    rect_i = i;
+        let rect_i = rect_vec_by_val[rect_idx];
+        rect_idx += 1;
+        if rect_idx >= input.n * 8 / 10 {
+            rect_idx = 0;
+            for i in 0..input.n {
+                let val = if out[i].size() > input.size[i] {
+                    1.0 - input.size[i] as f64 / out[i].size() as f64 / 2.0
+                } else {
+                    out[i].size() as f64 / input.size[i] as f64 / 2.0
+                };
+                let mut tmp =
+                    ((-(2.0 * std::f64::consts::PI * val).cos() / 2.0 + 0.5) * 255.0) as i32;
+                // tmp が 255に近いほど要求面積に近い
+                if val >= 0.5 {
+                    tmp = i32::max_value();
                 }
+                vals[i] = tmp;
             }
+            rect_vec_by_val.sort_by_key(|rect_i| vals[*rect_i]);
         }
-        mod_rects.insert(rect_i);
+
         // 変形方向を決める 4方向
         // (下は各方向の番号)
         //     1
