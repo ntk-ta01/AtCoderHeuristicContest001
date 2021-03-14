@@ -2,7 +2,7 @@ use proconio::input;
 use rand::Rng;
 use std::{collections::HashSet, fmt};
 
-const TIMELIMIT: f64 = 4.9;
+const TIMELIMIT: f64 = 4.955;
 fn main() {
     let time = Timer::new();
     input! {
@@ -82,11 +82,12 @@ fn solve(input: &Input, out: &mut Vec<Rect>) {
                     _ => (),
                 };
             }
+            let p = if input.n > 100 { 2 } else { 1 };
             match d {
-                0 => out[i].x1 -= ex_len,
-                1 => out[i].y1 -= ex_len,
-                2 => out[i].x2 += ex_len,
-                3 => out[i].y2 += ex_len,
+                0 => out[i].x1 -= ex_len / p,
+                1 => out[i].y1 -= ex_len / p,
+                2 => out[i].x2 += ex_len / p,
+                3 => out[i].y2 += ex_len / p,
                 _ => (),
             };
         }
@@ -328,30 +329,6 @@ fn expand(
             }
             _ => (),
         };
-        if intersect(&out[rect_i], &out[j]) {
-            eprintln!("intersect error");
-            match d {
-                0 => out[rect_i].x1 += ex_len,
-                1 => out[rect_i].y1 += ex_len,
-                2 => out[rect_i].x2 -= ex_len,
-                3 => out[rect_i].y2 -= ex_len,
-                _ => (),
-            };
-
-            for (j, shr_d, shr_len) in shrinkings.iter() {
-                match shr_d {
-                    0 => out[*j].x2 += shr_len,
-                    1 => out[*j].y2 += shr_len,
-                    2 => out[*j].x1 -= shr_len,
-                    3 => out[*j].y1 -= shr_len,
-                    _ => (),
-                };
-            }
-            for rect in out.iter() {
-                println!("{}", rect);
-            }
-            return (0, ex_len, shrinkings);
-        }
     }
     let score = compute_score(input, out);
 
