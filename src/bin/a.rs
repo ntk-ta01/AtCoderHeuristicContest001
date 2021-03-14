@@ -1,6 +1,6 @@
 use proconio::input;
 use rand::Rng;
-use std::{collections::HashSet, fmt};
+use std::{collections::HashSet, fmt, process::exit};
 
 const W: i32 = 10000;
 const TIMELIMIT: f64 = 4.9;
@@ -158,7 +158,7 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
         for d in 0..4 {
             let (new_score, ex_len, shrs) = expand(&input, out, rect_i, d);
             prob = f64::exp((new_score - score) as f64 / temp);
-            if score <= new_score || rng.gen_bool(prob) {
+            if score <= new_score || (new_score > 0 && rng.gen_bool(prob)) {
                 score = new_score;
                 match d {
                     0 => out[rect_i].x1 -= ex_len,
@@ -259,32 +259,49 @@ fn expand(
             let mut loss_now = i32::max_value();
             match now_d {
                 0 => {
-                    loss_now = if out[j].x1 < out[rect_i].x1 && input.ps[j].0 <= out[rect_i].x1 {
-                        (out[j].x2 - out[rect_i].x1) * (out[j].y2 - out[j].y1)
-                    } else {
-                        i32::max_value()
-                    };
+                    // 0方向にjを縮めて、rect_iを交差しなくなるかつjはkeyを含んだままかチェック
+                    let now_shr_len = out[j].x2 - out[rect_i].x1;
+                    out[j].x2 = out[rect_i].x1;
+                    loss_now =
+                        if out[j].contain_key(&input.ps[j]) && !intersect(&out[rect_i], &out[j]) {
+                            (out[j].x2 - out[rect_i].x1) * (out[j].y2 - out[j].y1)
+                        } else {
+                            i32::max_value()
+                        };
+                    out[j].x2 += now_shr_len;
                 }
                 1 => {
-                    loss_now = if out[j].y1 < out[rect_i].y1 && input.ps[j].1 <= out[rect_i].y1 {
-                        (out[j].x2 - out[j].x1) * (out[j].y2 - out[rect_i].y1)
-                    } else {
-                        i32::max_value()
-                    };
+                    let now_shr_len = out[j].y2 - out[rect_i].y1;
+                    out[j].y2 = out[rect_i].y1;
+                    loss_now =
+                        if out[j].contain_key(&input.ps[j]) && !intersect(&out[rect_i], &out[j]) {
+                            (out[j].x2 - out[j].x1) * (out[j].y2 - out[rect_i].y1)
+                        } else {
+                            i32::max_value()
+                        };
+                    out[j].y2 += now_shr_len;
                 }
                 2 => {
-                    loss_now = if out[rect_i].x2 < out[j].x2 && out[rect_i].x2 <= input.ps[j].0 {
-                        (out[rect_i].x2 - out[j].x1) * (out[j].y2 - out[j].y1)
-                    } else {
-                        i32::max_value()
-                    };
+                    let now_shr_len = out[rect_i].x2 - out[j].x1;
+                    out[j].x1 = out[rect_i].x2;
+                    loss_now =
+                        if out[j].contain_key(&input.ps[j]) && !intersect(&out[rect_i], &out[j]) {
+                            (out[rect_i].x2 - out[j].x1) * (out[j].y2 - out[j].y1)
+                        } else {
+                            i32::max_value()
+                        };
+                    out[j].x1 -= now_shr_len;
                 }
                 3 => {
-                    loss_now = if out[rect_i].y2 < out[j].y2 && out[rect_i].y2 <= input.ps[j].1 {
-                        (out[j].x2 - out[j].x1) * (out[rect_i].y2 - out[j].y1)
-                    } else {
-                        i32::max_value()
-                    };
+                    let now_shr_len = out[rect_i].y2 - out[j].y1;
+                    out[j].y1 = out[rect_i].y2;
+                    loss_now =
+                        if out[j].contain_key(&input.ps[j]) && !intersect(&out[rect_i], &out[j]) {
+                            (out[j].x2 - out[j].x1) * (out[rect_i].y2 - out[j].y1)
+                        } else {
+                            i32::max_value()
+                        };
+                    out[j].y1 -= now_shr_len;
                 }
                 _ => (),
             };
@@ -313,7 +330,28 @@ fn expand(
             _ => (),
         };
         if intersect(&out[rect_i], &out[j]) {
-            panic!();
+            eprintln!("intersect error");
+            match d {
+                0 => out[rect_i].x1 += ex_len,
+                1 => out[rect_i].y1 += ex_len,
+                2 => out[rect_i].x2 -= ex_len,
+                3 => out[rect_i].y2 -= ex_len,
+                _ => (),
+            };
+
+            for (j, shr_d, shr_len) in shrinkings.iter() {
+                match shr_d {
+                    0 => out[*j].x2 += shr_len,
+                    1 => out[*j].y2 += shr_len,
+                    2 => out[*j].x1 -= shr_len,
+                    3 => out[*j].y1 -= shr_len,
+                    _ => (),
+                };
+            }
+            for rect in out.iter() {
+                println!("{}", rect);
+            }
+            exit(1);
         }
     }
     let score = compute_score(input, out);
@@ -404,7 +442,7 @@ fn compute_score(input: &Input, out: &Vec<Rect>) -> i64 {
             && out[i].y1 <= input.ps[i].1
             && input.ps[i].1 < out[i].y2)
         {
-            // eprintln!("rectangle {} does not contain point {}", i, i);
+            eprintln!("rectangle {} does not contain point {}", i, i);
             continue;
         }
         for j in 0..i {
