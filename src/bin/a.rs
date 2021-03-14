@@ -2,7 +2,6 @@ use proconio::input;
 use rand::Rng;
 use std::{collections::HashSet, fmt};
 
-// const W: i32 = 10000;
 const TIMELIMIT: f64 = 4.9;
 fn main() {
     let time = Timer::new();
@@ -429,28 +428,6 @@ fn intersect(r1: &Rect, r2: &Rect) -> bool {
 fn compute_score(input: &Input, out: &Vec<Rect>) -> i64 {
     let mut score = 0.0;
     for i in 0..input.n {
-        // if out[i].x1 < 0 || out[i].x2 > W || out[i].y1 < 0 || out[i].y2 > W {
-        //     eprintln!("rectangle {} is out of range", i);
-        //     return 0;
-        // }
-        // if out[i].x1 >= out[i].x2 || out[i].y1 >= out[i].y2 {
-        //     eprintln!("rectangle {} does not have positive area", i);
-        //     return 0;
-        // }
-        // if !(out[i].x1 <= input.ps[i].0
-        //     && input.ps[i].0 < out[i].x2
-        //     && out[i].y1 <= input.ps[i].1
-        //     && input.ps[i].1 < out[i].y2)
-        // {
-        //     eprintln!("rectangle {} does not contain point {}", i, i);
-        //     continue;
-        // }
-        // for j in 0..i {
-        //     if intersect(&out[i], &out[j]) {
-        //         eprintln!("rectangles {} and {} overlap", j, i);
-        //         return 0;
-        //     }
-        // }
         let s = out[i].size().min(input.size[i]) as f64 / out[i].size().max(input.size[i]) as f64;
         score += 1.0 - (1.0 - s) * (1.0 - s);
     }
