@@ -98,7 +98,7 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
     let mut rng = rand_pcg::Pcg64Mcg::new(45612012516);
 
     const STARTTEMP: f64 = 1e7;
-    const ENDTEMP: f64 = 8e6;
+    const ENDTEMP: f64 = 1e4;
 
     let mut temp = STARTTEMP;
     let mut prob: f64;
@@ -110,13 +110,20 @@ fn simulated_annealing(input: &Input, out: &mut Vec<Rect>, score: i64, time: Tim
     let mut mod_rects = HashSet::new();
     let mut score = score;
 
+    // let mut graph_count = 0;
+
     loop {
         loop_count += 1;
+        // graph_count += 1;
         if loop_count >= 100 {
-            // println!("{} {}", temp, score);
+            // if graph_count >= 3000 {
+            //     println!("{} {}", temp, score);
+            //     graph_count = 0;
+            // }
             loop_count = 0;
             let passed = time.get_time() / TIMELIMIT;
             if passed >= 1.0 {
+                // println!("{} {}", temp, score);
                 break;
             }
             temp = STARTTEMP.powf(1.0 - passed) * ENDTEMP.powf(passed);
